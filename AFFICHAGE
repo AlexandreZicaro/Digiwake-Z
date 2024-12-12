@@ -1,0 +1,133 @@
+#include <Wire.h>
+#include <RTClib.h>
+#include <LedControl.h>
+#include <SPI.h>
+// Initialisation du module LedControl (DIN, CLK, CS, nombre de matrices)
+LedControl lc = LedControl(8, 10, 9, 4); // DIN=D8, CLK=D10, CS=D9, 4 modules
+RTC_DS3231 rtc;
+
+// Définition des chiffres à afficher sur les matrices LED 8x8
+byte numbers[10][8] = {
+  {B00111100,
+   B01100110,
+   B11000011, 
+   B11000011,
+   B11000011, 
+   B11000011, 
+   B01100110, 
+   B00111100}, // 0
+  {B00011000, 
+   B00111000, 
+   B00011000, 
+   B00011000, 
+   B00011000, 
+   B00011000, 
+   B00011000, 
+   B01111110}, // 1
+  {B00111100, 
+   B01100110, 
+   B11000011, 
+   B00000110, 
+   B00001100, 
+   B00110000, 
+   B01100000, 
+   B11111111}, // 2
+  {B00111100, 
+   B01100110, 
+   B00000110, 
+   B00111100, 
+   B00000110, 
+   B00000110, 
+   B01100110, 
+   B00111100}, // 3
+  {B00001100, 
+   B00011100, 
+   B00101100, 
+   B01001100, 
+   B10001100, 
+   B11111111, 
+   B00001100, 
+   B00001100}, // 4
+  {B11111111, 
+   B11000000, 
+   B11111100, 
+   B00000110, 
+   B00000011, 
+   B11000011, 
+   B01100110, 
+   B00111100}, // 5
+  {B00111100,  
+   B01100110, 
+   B11000000, 
+   B11111100, 
+   B11000110, 
+   B11000011, 
+   B01100110, 
+   B00111100}, // 6
+  {B11111111, 
+   B00000110, 
+   B00001100, 
+   B00011000, 
+   B00110000, 
+   B00110000, 
+   B00110000, 
+   B00110000}, // 7
+  {B00111100, 
+   B01100110, 
+   B11000011, 
+   B01100110, 
+   B00111100, 
+   B01100110, 
+   B11000011, 
+   B01100110}, // 8
+  {B00111100,  
+   B01100110, 
+   B11000011, 
+   B11000011, 
+   B01111110, 
+   B00000011, 
+   B01100110, 
+   B00111100}  // 9
+};
+
+void setup() {
+  Wire.begin(); // Initialisation du bus I2C
+  rtc.begin();  // Initialisation du module RTC
+
+  // Ajuster l'heure si nécessaire (décommenter pour définir l'heure)
+  rtc.adjust(DateTime(10, 30, 0));  // Ajuste à 1er décembre 2024, 10:30:00
+}
+
+// Fonction pour afficher un chiffre sur une matrice LED
+void displayNumber(int matrix, int num) {
+  for (int row = 0; row < 8; row++) {
+    lc.setRow(matrix, row, numbers[num][row]);
+  }
+}
+
+// Fonction pour afficher l'heure actuelle sur les matrices LED
+void displayTime() {
+  DateTime now = rtc.now();
+
+  // Extraire les heures et les minutes
+  int hour = now.hour();
+  int minute = now.minute();
+
+  // Affichage des heures (dizaine et unité)
+  displayNumber(0, hour / 10);  // Dizaine des heures
+  displayNumber(1, hour % 10);  // Unité des heures
+  
+  // Affichage des minutes (dizaine et unité)
+  displayNumber(2, minute / 10); // Dizaine des minutes
+  displayNumber(3, minute % 10); // Unité des minutes
+}
+
+void loop() {
+  DateTime now = rtc.now();
+
+  int hour = now.hour();
+  int minute = now.minute();
+
+  // Utiliser les variables 'hour' et 'minute' pour afficher l'heure
+}
+

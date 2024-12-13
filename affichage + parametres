@@ -93,12 +93,13 @@ void selectFormat() {
   display.println("2. 12h AM/PM");
   display.display();
 
-
+  int lastSubOption = 0;
   bool selecting = true;
   while (selecting) {
     int potValue = analogRead(potPin);
     int subOption = map(potValue, 0, 1023, 1, 2);
 
+    if (subOption != lastSubOption) {
     display.setCursor(0, 10);
     display.setTextColor(subOption == 1 ? BLACK : WHITE, subOption == 1 ? WHITE : BLACK);
     display.println("1. 24h");
@@ -107,6 +108,9 @@ void selectFormat() {
     display.setTextColor(subOption == 2 ? BLACK : WHITE, subOption == 2 ? WHITE : BLACK);
     display.println("2. 12h AM/PM");
     display.display();
+    lastSubOption = subOption;
+    delay(200); // Pause pour stabiliser la sélection
+  }
 
     // Confirmer la sélection avec le bouton sur la broche 2
     if (digitalRead(buttonSelectPin) == LOW) {

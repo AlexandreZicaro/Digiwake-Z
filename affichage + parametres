@@ -83,6 +83,7 @@ void displayMenu(int option) {
 }
 
 void selectFormat() {
+  delay(1000);
   display.clearDisplay();
   display.setCursor(0, 0);
   display.println("select format");
@@ -91,6 +92,7 @@ void selectFormat() {
   display.setCursor(0, 20);
   display.println("2. 12h AM/PM");
   display.display();
+
 
   bool selecting = true;
   while (selecting) {

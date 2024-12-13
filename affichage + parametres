@@ -1,5 +1,4 @@
 #include <LedControl.h>
-#include <avr/pgmspace.h>
 #include <Wire.h>
 #include <RTClib.h>
 #include <SPI.h>
@@ -52,7 +51,7 @@ const byte CHIFFRES[10][8] PROGMEM = {
 };
 
 // Variables globales
-bool format24h = true;
+bool format24h = true;  // Valeur par défaut (24h)
 bool modeAjustement = false;
 
 // Fonctions de gestion des affichages
@@ -63,11 +62,15 @@ void afficherChiffre(int position, const byte* chiffre) {
 }
 
 void afficherHeure(int heures, int minutes, bool amPm) {
+  // Affichage des heures
   afficherChiffre(3, CHIFFRES[heures / 10]);
   afficherChiffre(2, CHIFFRES[heures % 10]);
+  
+  // Affichage des minutes
   afficherChiffre(1, CHIFFRES[minutes / 10]);
   afficherChiffre(0, CHIFFRES[minutes % 10]);
 
+  // Si c'est un format 12h, afficher AM ou PM
   if (!format24h) {
     matriceLed.setChar(3, 6, amPm ? 'P' : 'A', false);
     matriceLed.setChar(3, 7, 'M', false);
@@ -93,7 +96,7 @@ void displayMenu(int option) {
   display.clearDisplay();
   display.setCursor(0, 0);
   
-  const char* menuOptions[] = {"Option 1", "Option 2", "Option 3", "Option 4"};
+  const char* menuOptions[] = {"Format de l'heure", "Option 2", "Option 3", "Option 4"};
   
   for (int i = 0; i < numOptions; i++) {
     display.setTextColor(i == option ? BLACK : WHITE, i == option ? WHITE : BLACK);
@@ -107,7 +110,7 @@ void selectFormat() {
   delay(1000);
   display.clearDisplay();
   display.setCursor(0, 0);
-  display.println("select format");
+  display.println("Select format:");
   display.setCursor(0, 10);
   display.println("1. 24h");
   display.setCursor(0, 20);
@@ -140,7 +143,7 @@ void selectFormat() {
     // Confirmer la sélection avec le bouton sur la broche 2
     if (digitalRead(buttonSelectPin) == LOW) {
       selecting = false;
-      format24h = (subOption == 1);  // Définir le format en fonction de l'option sélectionnée
+      format24h = (subOption == 1);  // Définir format24h en fonction de l'option sélectionnée
       display.clearDisplay();
       display.setCursor(0, 0);
       display.println(format24h ? "Format 24h choisi" : "Format 12h AM/PM choisi");

@@ -1,0 +1,209 @@
+#include <LedControl.h>
+#include <avr/pgmspace.h>
+#include <Wire.h>
+#include <RTClib.h>
+#include <SPI.h>
+
+// Définition des broches de raccordement Arduino Nano → Matrice LED pilotée par MAX7219
+#define brocheDeSelection               10  // Sortie D10 de l'Arduino (/SS) vers la broche CS de la matrice LED
+#define brochePourLesDonnees            11  // Sortie D11 de l'Arduino (MOSI) vers la broche DIN de la matrice LED
+#define brochePourLhorloge              13  // Sortie D13 de l'Arduino (SCK) vers la broche CLK de la matrice LED
+#define ok              2 
+#define boutonHeures   3  // Bouton pour ajuster les heures (D3)
+#define boutonMinutes  4  // Bouton pour ajuster les minutes (D4)
+#define boutonValider  5  // Bouton pour valider l'heure ajustée (D5)
+#define buzzerPin      8  // Buzzer connecté à D8
+
+// Définition des autres constantes
+#define nombreDeMatricesLedRaccordees   4   // Nombre total de matrices LED (4 pour HH:MM)
+
+// Instanciation des objets LedControl et RTC
+LedControl matriceLed = LedControl(brochePourLesDonnees, brochePourLhorloge, brocheDeSelection, nombreDeMatricesLedRaccordees);
+RTC_DS3231 rtc;
+
+// Définition des chiffres en PROGMEM
+const byte CHIFFRE_0[] PROGMEM = {0b00111100, 0b01000010, 0b01000010, 0b01000010, 0b01000010, 0b01000010, 0b01000010, 0b00111100};
+const byte CHIFFRE_1[] PROGMEM = {0b00001000, 0b00011000, 0b00101000, 0b00001000, 0b00001000, 0b00001000, 0b00001000, 0b00011100};
+const byte CHIFFRE_2[] PROGMEM = {0b00111100, 0b01000010, 0b00000100, 0b00001000, 0b00010000, 0b00100000, 0b01000010, 0b01111110};
+const byte CHIFFRE_3[] PROGMEM = {0b00111100, 0b01000010, 0b00000110, 0b00011110, 0b00000110, 0b00000110, 0b01000010, 0b00111100};
+const byte CHIFFRE_4[] PROGMEM = {0b00000100, 0b00001100, 0b00010100, 0b00100100, 0b01111110, 0b00000100, 0b00000100, 0b00000100};
+const byte CHIFFRE_5[] PROGMEM = {0b01111110, 0b01000000, 0b01000000, 0b01111100, 0b00000010, 0b00000010, 0b01000010, 0b00111100};
+const byte CHIFFRE_6[] PROGMEM = {0b00111100, 0b01000010, 0b01000000, 0b01111100, 0b01000010, 0b01000010, 0b01000010, 0b00111100};
+const byte CHIFFRE_7[] PROGMEM = {0b01111110, 0b00000010, 0b00000010, 0b00000100, 0b00001000, 0b00010000, 0b00100000, 0b01000000};
+const byte CHIFFRE_8[] PROGMEM = {0b00111100, 0b01000010, 0b01000010, 0b00111100, 0b01000010, 0b01000010, 0b01000010, 0b00111100};
+const byte CHIFFRE_9[] PROGMEM = {0b00111100, 0b01000010, 0b01000010, 0b01000010, 0b00111110, 0b00000010, 0b01000010, 0b00111100};
+ 
+// Tableau des chiffres pour accès rapide
+const byte* const CHIFFRES[] PROGMEM = {CHIFFRE_0, CHIFFRE_1, CHIFFRE_2, CHIFFRE_3, CHIFFRE_4, CHIFFRE_5, CHIFFRE_6, CHIFFRE_7, CHIFFRE_8, CHIFFRE_9};
+
+// Fonction d'affichage d'un chiffre sur une matrice
+void afficherChiffre(int position, const byte* chiffre);
+
+// Variables globales
+bool format24h = true;           // Par défaut, format 24h
+bool boutonEtatPrecedent = false; // État précédent du bouton
+bool modeAjustement = false; // Indique si on est en mode ajustement
+int heuresAjustees = 0;
+int minutesAjustees = 0;
+int alarmHour = 0;
+int alarmMinute = 0;
+
+void setup() {
+  // Initialisation des matrices LED
+  for (int i = 0; i < nombreDeMatricesLedRaccordees; i++) {
+    matriceLed.shutdown(i, false);     // Réveille la matrice LED
+    matriceLed.setIntensity(i, 8);    // Définit l'intensité (0-15)
+    matriceLed.clearDisplay(i);       // Efface l'affichage
+  }
+
+  Serial.begin(9600);
+  Serial.println("Init : 0");
+ 
+  Wire.begin();       // Initialise la communication I2C
+  
+  Serial.println("Init : 1");
+
+  rtc.begin();       
+  rtc.adjust(DateTime(__DATE__, __TIME__));
+
+  Serial.println("Init : 2");
+
+  pinMode(boutonHeures, INPUT);  // Bouton pour ajuster les heures
+  pinMode(boutonMinutes, INPUT); // Bouton pour ajuster les minutes
+  pinMode(boutonValider, INPUT); // Bouton pour valider les ajustements
+  pinMode(buzzerPin, OUTPUT);    // Buzzer
+
+  pinMode(ok, INPUT_PULLUP);     // Bouton pour régler l'alarme
+}
+
+void afficherChiffre(int position, const byte* chiffre) {
+  for (int i = 0; i < 8; i++) {
+    matriceLed.setRow(position, i, pgm_read_byte(&(chiffre[i])));  // Charge chaque ligne de la matrice
+  }
+}
+
+void afficherHeure(int heures, int minutes) {
+  afficherChiffre(3, (const byte*)pgm_read_word(&(CHIFFRES[heures / 10])));
+  afficherChiffre(2, (const byte*)pgm_read_word(&(CHIFFRES[heures % 10])));
+  afficherChiffre(1, (const byte*)pgm_read_word(&(CHIFFRES[minutes / 10])));
+  afficherChiffre(0, (const byte*)pgm_read_word(&(CHIFFRES[minutes % 10])));
+}
+
+void ajusterHeure() {
+  if (digitalRead(boutonHeures)) {
+    heuresAjustees = (heuresAjustees + 1) % (format24h ? 24 : 12); // Limite à 23h ou 11h
+    if (heuresAjustees == 0 && !format24h) heuresAjustees = 12;    // Minuit devient 12h en 12h
+    delay(200); // Anti-rebond
+  }
+  
+  if (digitalRead(boutonMinutes)) {
+    minutesAjustees = (minutesAjustees + 1) % 60; // Limite à 59 minutes
+    delay(200); // Anti-rebond
+  }
+
+  afficherHeure(heuresAjustees, minutesAjustees);
+}
+
+void gererBoutonsModeAjustement() {
+  if (digitalRead(boutonValider)) {
+    if (!modeAjustement) {
+      // Activation du mode ajustement
+      modeAjustement = true;
+      DateTime now = rtc.now();
+      heuresAjustees = now.hour();
+      minutesAjustees = now.minute();
+    } else {
+      // Validation et désactivation du mode ajustement
+      rtc.adjust(DateTime(2023, 1, 1, heuresAjustees, minutesAjustees, 0)); // Exemple de date arbitraire
+      modeAjustement = false;
+    }
+    delay(500); // Anti-rebond
+  }
+
+  if (modeAjustement) {
+    ajusterHeure();
+  }
+}
+void ajusterAlarme() {
+  static bool enModeAjustementAlarme = false;
+  static bool pointAllume = false;
+  static int heuresAlarme = alarmHour;
+  static int minutesAlarme = alarmMinute;
+
+  if (!enModeAjustementAlarme) {
+    enModeAjustementAlarme = true;
+    heuresAlarme = alarmHour;
+    minutesAlarme = alarmMinute;
+  }
+
+  if (digitalRead(boutonHeures)) {
+    heuresAlarme = (heuresAlarme + 1) % 24;
+    delay(200); // Anti-rebond
+  }
+
+  if (digitalRead(boutonMinutes)) {
+    minutesAlarme = (minutesAlarme + 1) % 60;
+    delay(200); // Anti-rebond
+  }
+
+  // Clignotement du séparateur    
+  pointAllume = !pointAllume;
+  matriceLed.setLed(2, 3, 7, pointAllume);
+  afficherHeure(heuresAlarme, minutesAlarme);
+
+  if (digitalRead(boutonValider)) {
+    // Validation de l'alarme
+    alarmHour = heuresAlarme;
+    alarmMinute = minutesAlarme;
+    enModeAjustementAlarme = false;
+    delay(500); // Anti-rebond
+  }
+}
+
+
+
+void loop() {
+  static bool alarmeActivee = false;
+  static unsigned long previousMillis = 0;
+  const long interval = 1000; // Intervalle de 1 seconde
+  static bool pointAllume = false;
+
+  // Si on est en mode ajustement, gérer les boutons
+  gererBoutonsModeAjustement();
+
+  if (!modeAjustement) {
+    // Récupérer l'heure actuelle
+    DateTime now = rtc.now();
+
+    // Afficher l'heure actuelle
+    afficherHeure(now.hour(), now.minute());
+
+    // Vérifier si l'heure actuelle correspond à l'heure de l'alarme
+    if (now.hour() == alarmHour && now.minute() == alarmMinute && !alarmeActivee) {
+      // Activer le buzzer
+      digitalWrite(buzzerPin, HIGH);
+      delay(1000); // Durée du signal du buzzer
+      digitalWrite(buzzerPin, LOW);
+      alarmeActivee = true; // Éviter les répétitions d'alarme dans la même minute
+    }
+
+    // Réinitialiser l'état de l'alarme à la minute suivante
+    if (now.minute() != alarmMinute) {
+      alarmeActivee = false;
+    }
+  }
+
+  // Vérifier si le bouton pour ajuster l'alarme est appuyé
+  if (digitalRead(ok) == LOW) { // Bouton appuyé (utilisation du pull-up)
+    delay(200); // Anti-rebond
+    // Entrer dans le mode d'ajustement de l'alarme
+  }
+
+  // Faire clignoter le séparateur toutes les secondes
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
+    pointAllume = !pointAllume;
+    matriceLed.setLed(2, 3, 7, pointAllume); // Clignotement du séparateur
+  }
+}

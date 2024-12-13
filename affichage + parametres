@@ -27,6 +27,12 @@ const int numOptions = 4;
 int lastPotValue = 0;
 int threshold = 50;
 
+// Variables pour le lissage du potentiomètre
+#define NOMBRE_LISSAGE 10  // Nombre de lectures pour lisser la valeur
+#define SEUIL_DE_CHANGEMENT 512  // Seuil de changement de format (modifié selon la plage de potentiomètre)
+int valeursPotentiometre[NOMBRE_LISSAGE];  // Tableau pour stocker les dernières valeurs
+int indice = 0;  // Indice pour ajouter de nouvelles valeurs
+
 // Instanciation des objets LedControl et RTC
 LedControl matriceLed = LedControl(brochePourLesDonnees, brochePourLhorloge, brocheDeSelection, nombreDeMatricesLedRaccordees);
 RTC_DS3231 rtc;
@@ -68,6 +74,21 @@ void afficherHeure(int heures, int minutes, bool amPm) {
   }
 }
 
+// Lissage de la valeur du potentiomètre
+int lirePotentiometreStable() {
+  int somme = 0;
+  // Ajouter la nouvelle valeur dans le tableau
+  valeursPotentiometre[indice] = analogRead(potPin);
+  indice = (indice + 1) % NOMBRE_LISSAGE;
+
+  // Calculer la moyenne des dernières lectures
+  for (int i = 0; i < NOMBRE_LISSAGE; i++) {
+    somme += valeursPotentiometre[i];
+  }
+
+  return somme / NOMBRE_LISSAGE;  // Retourner la moyenne
+}
+
 void displayMenu(int option) {
   display.clearDisplay();
   display.setCursor(0, 0);
@@ -96,31 +117,35 @@ void selectFormat() {
   int lastSubOption = 0;
   bool selecting = true;
   while (selecting) {
-    int potValue = analogRead(potPin);
-    int subOption = map(potValue, 0, 1023, 1, 2);
+    // Lire la valeur stable du potentiomètre
+    int potValue = lirePotentiometreStable();
+    int subOption = (potValue < SEUIL_DE_CHANGEMENT) ? 1 : 2;  // 1 pour 24h, 2 pour 12h
 
+    // Afficher la sélection de manière lisible si l'option a changé
     if (subOption != lastSubOption) {
-    display.setCursor(0, 10);
-    display.setTextColor(subOption == 1 ? BLACK : WHITE, subOption == 1 ? WHITE : BLACK);
-    display.println("1. 24h");
+      lastSubOption = subOption;
 
-    display.setCursor(0, 20);
-    display.setTextColor(subOption == 2 ? BLACK : WHITE, subOption == 2 ? WHITE : BLACK);
-    display.println("2. 12h AM/PM");
-    display.display();
-    lastSubOption = subOption;
-    delay(200); // Pause pour stabiliser la sélection
-  }
+      display.setCursor(0, 10);
+      display.setTextColor(subOption == 1 ? BLACK : WHITE, subOption == 1 ? WHITE : BLACK);
+      display.println("1. 24h");
+
+      display.setCursor(0, 20);
+      display.setTextColor(subOption == 2 ? BLACK : WHITE, subOption == 2 ? WHITE : BLACK);
+      display.println("2. 12h AM/PM");
+      display.display();
+
+      delay(200);  // Attendre un peu avant de redessiner l'écran
+    }
 
     // Confirmer la sélection avec le bouton sur la broche 2
     if (digitalRead(buttonSelectPin) == LOW) {
       selecting = false;
-      format24h = (subOption == 1);
+      format24h = (subOption == 1);  // Définir le format en fonction de l'option sélectionnée
       display.clearDisplay();
       display.setCursor(0, 0);
       display.println(format24h ? "Format 24h choisi" : "Format 12h AM/PM choisi");
       display.display();
-      delay(2000);
+      delay(2000);  // Attendre 2 secondes pour afficher la confirmation
 
       // Attendre que le bouton soit relâché
       while (digitalRead(buttonSelectPin) == LOW) {
@@ -198,7 +223,7 @@ void loop() {
     }
   }
 
-    if (!modeAjustement) {
+  if (!modeAjustement) {
     static int minutePrecedente = -1;
     static bool pointAllume = false;
     DateTime now = rtc.now();
@@ -234,4 +259,3 @@ void loop() {
     }
   }
 }
-

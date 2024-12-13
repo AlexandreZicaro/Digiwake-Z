@@ -1,133 +1,154 @@
+#include <LedControl.h>
+#include <avr/pgmspace.h>
 #include <Wire.h>
 #include <RTClib.h>
-#include <LedControl.h>
 #include <SPI.h>
-// Initialisation du module LedControl (DIN, CLK, CS, nombre de matrices)
-LedControl lc = LedControl(8, 10, 9, 4); // DIN=D8, CLK=D10, CS=D9, 4 modules
+
+// Définition des broches de raccordement Arduino Nano → Matrice LED pilotée par MAX7219
+#define brocheDeSelection               10  // Sortie D10 de l'Arduino (/SS) vers la broche CS de la matrice LED
+#define brochePourLesDonnees            11  // Sortie D11 de l'Arduino (MOSI) vers la broche DIN de la matrice LED
+#define brochePourLhorloge              13  // Sortie D13 de l'Arduino (SCK) vers la broche CLK de la matrice LED
+#define ok             2   // Bouton connecté à D2 (pull-down)
+#define boutonHeures   3  // Bouton pour ajuster les heures (D3)
+#define boutonMinutes  4  // Bouton pour ajuster les minutes (D4)
+#define boutonValider  5  // Bouton pour valider l'heure ajustée (D5)
+
+// Définition des autres constantes
+#define nombreDeMatricesLedRaccordees   4   // Nombre total de matrices LED (4 pour HH:MM)
+
+// Instanciation des objets LedControl et RTC
+LedControl matriceLed = LedControl(brochePourLesDonnees, brochePourLhorloge, brocheDeSelection, nombreDeMatricesLedRaccordees);
 RTC_DS3231 rtc;
 
-// Définition des chiffres à afficher sur les matrices LED 8x8
-byte numbers[10][8] = {
-  {B00111100,
-   B01100110,
-   B11000011, 
-   B11000011,
-   B11000011, 
-   B11000011, 
-   B01100110, 
-   B00111100}, // 0
-  {B00011000, 
-   B00111000, 
-   B00011000, 
-   B00011000, 
-   B00011000, 
-   B00011000, 
-   B00011000, 
-   B01111110}, // 1
-  {B00111100, 
-   B01100110, 
-   B11000011, 
-   B00000110, 
-   B00001100, 
-   B00110000, 
-   B01100000, 
-   B11111111}, // 2
-  {B00111100, 
-   B01100110, 
-   B00000110, 
-   B00111100, 
-   B00000110, 
-   B00000110, 
-   B01100110, 
-   B00111100}, // 3
-  {B00001100, 
-   B00011100, 
-   B00101100, 
-   B01001100, 
-   B10001100, 
-   B11111111, 
-   B00001100, 
-   B00001100}, // 4
-  {B11111111, 
-   B11000000, 
-   B11111100, 
-   B00000110, 
-   B00000011, 
-   B11000011, 
-   B01100110, 
-   B00111100}, // 5
-  {B00111100,  
-   B01100110, 
-   B11000000, 
-   B11111100, 
-   B11000110, 
-   B11000011, 
-   B01100110, 
-   B00111100}, // 6
-  {B11111111, 
-   B00000110, 
-   B00001100, 
-   B00011000, 
-   B00110000, 
-   B00110000, 
-   B00110000, 
-   B00110000}, // 7
-  {B00111100, 
-   B01100110, 
-   B11000011, 
-   B01100110, 
-   B00111100, 
-   B01100110, 
-   B11000011, 
-   B01100110}, // 8
-  {B00111100,  
-   B01100110, 
-   B11000011, 
-   B11000011, 
-   B01111110, 
-   B00000011, 
-   B01100110, 
-   B00111100}  // 9
-};
+// Définition des chiffres en PROGMEM
+const byte CHIFFRE_0[] PROGMEM = {0b00111100, 0b01000010, 0b01000010, 0b01000010, 0b01000010, 0b01000010, 0b01000010, 0b00111100};
+const byte CHIFFRE_1[] PROGMEM = {0b00001000, 0b00011000, 0b00101000, 0b00001000, 0b00001000, 0b00001000, 0b00001000, 0b00011100};
+const byte CHIFFRE_2[] PROGMEM = {0b00111100, 0b01000010, 0b00000100, 0b00001000, 0b00010000, 0b00100000, 0b01000010, 0b01111110};
+const byte CHIFFRE_3[] PROGMEM = {0b00111100, 0b01000010, 0b00000110, 0b00011110, 0b00000110, 0b00000110, 0b01000010, 0b00111100};
+const byte CHIFFRE_4[] PROGMEM = {0b00000100, 0b00001100, 0b00010100, 0b00100100, 0b01111110, 0b00000100, 0b00000100, 0b00000100};
+const byte CHIFFRE_5[] PROGMEM = {0b01111110, 0b01000000, 0b01000000, 0b01111100, 0b00000010, 0b00000010, 0b01000010, 0b00111100};
+const byte CHIFFRE_6[] PROGMEM = {0b00111100, 0b01000010, 0b01000000, 0b01111100, 0b01000010, 0b01000010, 0b01000010, 0b00111100};
+const byte CHIFFRE_7[] PROGMEM = {0b01111110, 0b00000010, 0b00000010, 0b00000100, 0b00001000, 0b00010000, 0b00100000, 0b01000000};
+const byte CHIFFRE_8[] PROGMEM = {0b00111100, 0b01000010, 0b01000010, 0b00111100, 0b01000010, 0b01000010, 0b01000010, 0b00111100};
+const byte CHIFFRE_9[] PROGMEM = {0b00111100, 0b01000010, 0b01000010, 0b01000010, 0b00111110, 0b00000010, 0b01000010, 0b00111100};
+
+// Tableau des chiffres pour accès rapide
+const byte* const CHIFFRES[] PROGMEM = {CHIFFRE_0, CHIFFRE_1, CHIFFRE_2, CHIFFRE_3, CHIFFRE_4, CHIFFRE_5, CHIFFRE_6, CHIFFRE_7, CHIFFRE_8, CHIFFRE_9};
+
+// Fonction d'affichage d'un chiffre sur une matrice
+void afficherChiffre(int position, const byte* chiffre);
+
+// Variables globales
+bool format24h = true;           // Par défaut, format 24h
+bool boutonEtatPrecedent = false; // État précédent du bouton
+bool modeAjustement = false; // Indique si on est en mode ajustement
+int heuresAjustees = 0;
+int minutesAjustees = 0;
 
 void setup() {
-  Wire.begin(); // Initialisation du bus I2C
-  rtc.begin();  // Initialisation du module RTC
+  // Initialisation des matrices LED
+  for (int i = 0; i < nombreDeMatricesLedRaccordees; i++) {
+    matriceLed.shutdown(i, false);     // Réveille la matrice LED
+    matriceLed.setIntensity(i, 8);    // Définit l'intensité (0-15)
+    matriceLed.clearDisplay(i);       // Efface l'affichage
+  }
 
-  // Ajuster l'heure si nécessaire (décommenter pour définir l'heure)
-  rtc.adjust(DateTime(10, 30, 0));  // Ajuste à 1er décembre 2024, 10:30:00
+  Serial.begin(9600);
+  Serial.println("Init : 0");
+ 
+  Wire.begin();       // Initialise la communication I2C
+  
+  Serial.println("Init : 1");
+
+  rtc.begin();       
+  rtc.adjust(DateTime(__DATE__, __TIME__));
+
+  Serial.println("Init : 2");
+
+  pinMode(boutonHeures, INPUT);  // Bouton pour ajuster les heures
+  pinMode(boutonMinutes, INPUT); // Bouton pour ajuster les minutes
+  pinMode(boutonValider, INPUT); // Bouton pour valider les ajustements
 }
 
-// Fonction pour afficher un chiffre sur une matrice LED
-void displayNumber(int matrix, int num) {
-  for (int row = 0; row < 8; row++) {
-    lc.setRow(matrix, row, numbers[num][row]);
+void afficherChiffre(int position, const byte* chiffre) {
+  for (int i = 0; i < 8; i++) {
+    matriceLed.setRow(position, i, pgm_read_byte(&(chiffre[i])));  // Charge chaque ligne de la matrice
   }
 }
 
-// Fonction pour afficher l'heure actuelle sur les matrices LED
-void displayTime() {
-  DateTime now = rtc.now();
+void afficherHeure(int heures, int minutes) {
+  afficherChiffre(3, (const byte*)pgm_read_word(&(CHIFFRES[heures / 10])));
+  afficherChiffre(2, (const byte*)pgm_read_word(&(CHIFFRES[heures % 10])));
+  afficherChiffre(1, (const byte*)pgm_read_word(&(CHIFFRES[minutes / 10])));
+  afficherChiffre(0, (const byte*)pgm_read_word(&(CHIFFRES[minutes % 10])));
+}
 
-  // Extraire les heures et les minutes
-  int hour = now.hour();
-  int minute = now.minute();
-
-  // Affichage des heures (dizaine et unité)
-  displayNumber(0, hour / 10);  // Dizaine des heures
-  displayNumber(1, hour % 10);  // Unité des heures
+void ajusterHeure() {
+  if (digitalRead(boutonHeures)) {
+    heuresAjustees = (heuresAjustees + 1) % (format24h ? 24 : 12); // Limite à 23h ou 11h
+    if (heuresAjustees == 0 && !format24h) heuresAjustees = 12;    // Minuit devient 12h en 12h
+    delay(200); // Anti-rebond
+  }
   
-  // Affichage des minutes (dizaine et unité)
-  displayNumber(2, minute / 10); // Dizaine des minutes
-  displayNumber(3, minute % 10); // Unité des minutes
+  if (digitalRead(boutonMinutes)) {
+    minutesAjustees = (minutesAjustees + 1) % 60; // Limite à 59 minutes
+    delay(200); // Anti-rebond
+  }
+
+  afficherHeure(heuresAjustees, minutesAjustees);
+}
+
+void gererBoutonsModeAjustement() {
+  if (digitalRead(boutonValider)) {
+    if (!modeAjustement) {
+      // Activation du mode ajustement
+      modeAjustement = true;
+      DateTime now = rtc.now();
+      heuresAjustees = now.hour();
+      minutesAjustees = now.minute();
+    } else {
+      // Validation et désactivation du mode ajustement
+      rtc.adjust(DateTime(2023, 1, 1, heuresAjustees, minutesAjustees, 0)); // Exemple de date arbitraire
+      modeAjustement = false;
+    }
+    delay(500); // Anti-rebond
+  }
+
+  if (modeAjustement) {
+    ajusterHeure();
+  }
 }
 
 void loop() {
-  DateTime now = rtc.now();
+  if (!modeAjustement) {
+    static int minutePrecedente = -1;
+    static bool pointAllume = false;
+    DateTime now = rtc.now();
 
-  int hour = now.hour();
-  int minute = now.minute();
+    // Lecture de l'heure
+    int heures = now.hour();
+    int minutes = now.minute();
 
-  // Utiliser les variables 'hour' et 'minute' pour afficher l'heure
+    // Conversion 12h si nécessaire
+    if (!format24h) {
+      if (heures == 0) heures = 12;          
+      else if (heures > 12) heures -= 12;    
+    }
+
+    // Affichage de l'heure si la minute a changé
+    if (minutes != minutePrecedente) {
+      minutePrecedente = minutes;
+      afficherHeure(heures, minutes);
+    }
+
+    // Clignotement du séparateur
+    pointAllume = !pointAllume;
+    matriceLed.setLed(2, 3, 7, pointAllume);
+
+    delay(1000);
+  }
+
+  // Gestion des boutons pour le mode ajustement
+  gererBoutonsModeAjustement();
 }
 

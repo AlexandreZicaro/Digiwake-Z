@@ -1,0 +1,41 @@
+#include <Wire.h>
+#include <RTClib.h>
+
+// Instanciation de l'objet RTC
+RTC_DS1307 rtc; // Utilisation de RTC_DS1307 qui est compatible avec Tiny I2C
+
+void setup() {
+  Serial.begin(9600);
+  Wire.begin();
+  
+  // Initialisation du module RTC
+  if (!rtc.begin()) {
+    Serial.println("RTC non trouvé !");
+    while (1);
+  }
+
+  // Si l'horloge a perdu son alimentation, régler à une date et heure par défaut
+  if (rtc.lostPower()) {
+    Serial.println("RTC a perdu l'alimentation, réglage à la date et heure par défaut !");
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  }
+}
+
+void loop() {
+  DateTime now = rtc.now(); // Lire l'heure actuelle du RTC
+
+  // Affichage de l'heure et la date dans le terminal série
+  Serial.print(now.year(), DEC);
+  Serial.print('/');
+  Serial.print(now.month(), DEC);
+  Serial.print('/');
+  Serial.print(now.day(), DEC);
+  Serial.print(" ");
+  Serial.print(now.hour(), DEC);
+  Serial.print(':');
+  Serial.print(now.minute(), DEC);
+  Serial.print(':');
+  Serial.println(now.second(), DEC);
+  
+  delay(1000); // Attendre une seconde avant de lire à nouveau
+}

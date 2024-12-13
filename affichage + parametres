@@ -115,6 +115,11 @@ void selectFormat() {
       display.println(format24h ? "Format 24h choisi" : "Format 12h AM/PM choisi");
       display.display();
       delay(2000);
+
+      // Attendre que le bouton soit relâché
+      while (digitalRead(buttonSelectPin) == LOW) {
+        delay(10);
+      }
     }
   }
 }
@@ -129,8 +134,6 @@ void selectOption(int option) {
     display.display();
     delay(2000);
   }
-
-  displayMenu(menuOption);
 }
 
 void setup() {
@@ -172,14 +175,24 @@ void loop() {
   if (digitalRead(buttonSelectPin) == LOW) {
     selectOption(menuOption);
     delay(500);
+
+    // Attendre que le bouton soit relâché
+    while (digitalRead(buttonSelectPin) == LOW) {
+      delay(10);
+    }
   }
 
   if (digitalRead(buttonBackPin) == LOW) {
     displayMenu(menuOption);
     delay(500);
+
+    // Attendre que le bouton soit relâché
+    while (digitalRead(buttonBackPin) == LOW) {
+      delay(10);
+    }
   }
 
-  if (!modeAjustement) {
+    if (!modeAjustement) {
     static int minutePrecedente = -1;
     static bool pointAllume = false;
     DateTime now = rtc.now();
@@ -188,7 +201,7 @@ void loop() {
     int minutes = now.minute();
     bool amPm = heures >= 12;
 
-        if (!format24h) {
+    if (!format24h) {
       if (heures == 0) heures = 12;
       else if (heures > 12) heures -= 12;
     }
@@ -203,4 +216,16 @@ void loop() {
 
     delay(1000);
   }
+
+  // Attendre l'appui sur le bouton de retour pour revenir au menu principal
+  if (digitalRead(buttonBackPin) == LOW) {
+    displayMenu(menuOption);
+    delay(500);
+
+    // Attendre que le bouton soit relâché
+    while (digitalRead(buttonBackPin) == LOW) {
+      delay(10);
+    }
+  }
 }
+

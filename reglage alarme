@@ -1,0 +1,162 @@
+
+#include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+#define SCREEN_WIDTH 128 // largeur de l'écran
+#define SCREEN_HEIGHT 64 // hauteur de l'écran
+#define OLED_RESET -1 // Réinitialisation partagée de l'écran OLED
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+#define ok             2 
+#define boutonHeures   5  // Bouton pour ajuster les heures (D3)
+#define boutonMinutes  4  // Bouton pour ajuster les minutes (D4)
+
+const int potPin = A0; // Broche du potentiomètre
+const int buttonSelectPin = 2; // Broche du bouton de sélection
+const int buttonBackPin = 3; // Broche du bouton retour
+int menuOption = 0; // Option de menu sélectionnée
+const int numOptions = 4; // Nombre d'options de menu
+int lastPotValue = 0; // Dernière valeur lue du potentiomètre
+int threshold = 50; // Seuil de changement pour éviter le bruit
+
+void displayMenu(int option); // Déclaration de la fonction displayMenu
+void selectOption(int option); // Déclaration de la fonction selectOption
+
+void setup() {
+  Serial.begin(115200);
+
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for(;;);
+  }
+
+  pinMode(buttonSelectPin, INPUT_PULLUP); // Configuration du bouton de sélection avec résistance pull-up interne
+  pinMode(buttonBackPin, INPUT_PULLUP); // Configuration du bouton retour avec résistance pull-up interne
+
+  delay(2000);
+  display.clearDisplay();
+
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  displayMenu(menuOption); // Afficher le menu au démarrage
+}
+
+void loop() {
+  int potValue = analogRead(potPin); // Lire la valeur du potentiomètre
+  
+  // Si la différence entre la nouvelle et l'ancienne valeur est supérieure au seuil
+  if (abs(potValue - lastPotValue) > threshold) {
+    // Mettre à jour l'option de menu en fonction de la nouvelle valeur du potentiomètre
+    menuOption = map(potValue, 0, 1023, 0, numOptions - 1); 
+    lastPotValue = potValue; // Mettre à jour la dernière valeur lue du potentiomètre
+    
+    displayMenu(menuOption); // Afficher le menu mis à jour
+  }
+
+  // Vérifier si le bouton de sélection est pressé
+  if (digitalRead(buttonSelectPin) == LOW) {
+    selectOption(menuOption);
+    delay(500); // Petit délai pour éviter les rebonds de bouton
+  }
+
+  // Vérifier si le bouton retour est pressé
+  if (digitalRead(buttonBackPin) == LOW) {
+    displayMenu(menuOption); // Revenir au menu principal
+    delay(500); // Petit délai pour éviter les rebonds de bouton
+  }
+
+  delay(100); // Ajouter un léger délai pour rendre la navigation plus fluide
+}
+
+void displayMenu(int option) {
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  
+  String menuOptions[numOptions] = {"Option 1", "Reglage alarme", "Option 3", "Option 4"};
+  
+  for (int i = 0; i < numOptions; i++) {
+    if (i == option) {
+      display.setTextColor(BLACK, WHITE); // Mettre en surbrillance l'option sélectionnée
+    } else {
+      display.setTextColor(WHITE, BLACK);
+    }
+    display.setCursor(0, i * 10);
+    display.println(menuOptions[i]);
+  }
+  display.display();
+}
+
+void modifierHeureSurOLED() {
+  int heures = 8; // Heure par défaut
+  int minutes = 0; // Minute par défaut
+  bool ajustementTermine = false;
+
+  unsigned long lastHeurePress = 0; // Dernier moment où le bouton heures a été pressé
+  unsigned long lastMinutePress = 0; // Dernier moment où le bouton minutes a été pressé
+  unsigned long lastValidationPress = 0; // Dernier moment où le bouton de validation a été pressé
+  unsigned long debounceDelay = 100; // Délais anti-rebond en millisecondes
+
+  display.clearDisplay();
+  display.setTextSize(2);
+
+  while (!ajustementTermine) {
+    // Affiche l'heure actuelle sur l'écran OLED
+    display.clearDisplay();
+    display.setCursor(20, 20);
+    display.print(heures < 10 ? "0" : "");
+    display.print(heures);
+    display.print(":");
+    display.print(minutes < 10 ? "0" : "");
+    display.print(minutes);
+    display.display();
+
+    // Vérifie si le bouton des heures est appuyé
+    if (digitalRead(boutonHeures) == HIGH && (millis() - lastHeurePress) > debounceDelay) {
+      heures = (heures + 1) % 24; // Incrémente les heures (24h max)
+      lastHeurePress = millis(); // Met à jour le moment où le bouton a été pressé
+    }
+
+    // Vérifie si le bouton des minutes est appuyé
+    if (digitalRead(boutonMinutes) == HIGH && (millis() - lastMinutePress) > debounceDelay) {
+      minutes = (minutes + 1) % 60; // Incrémente les minutes (59 max)
+      lastMinutePress = millis(); // Met à jour le moment où le bouton a été pressé
+    }
+
+    // Vérifie si le bouton de validation est appuyé (pin2)
+    delay(200);
+    if (digitalRead(ok) == LOW && (millis() - lastValidationPress) > debounceDelay) {
+      ajustementTermine = true; // Termine l'ajustement lorsque l'utilisateur appuie sur le bouton de validation
+      lastValidationPress = millis(); // Met à jour le moment où le bouton a été pressé
+    }
+    
+    // Aucun délai d'attente supplémentaire ici, tout se fait avec millis() pour plus de réactivité.
+  }
+
+  // Affichage final de confirmation
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println("Alarme:");
+  display.setCursor(0, 20);
+  display.print(heures < 10 ? "0" : "");
+  display.print(heures);
+  display.print(":");
+  display.print(minutes < 10 ? "0" : "");
+  display.print(minutes);
+  display.display();
+  delay(2000); // Affiche la confirmation pendant 2 secondes
+}
+
+
+void selectOption(int option) {
+  if (option == 1) { // Gestion de l'option 2
+    modifierHeureSurOLED();
+  } else {
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("Option " + String(option + 1) + " choisie");
+    display.display();
+    delay(2000);
+  }
+}

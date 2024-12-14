@@ -1,3 +1,4 @@
+
 #include <LedControl.h>
 #include <Wire.h>
 #include <RTClib.h>
@@ -18,6 +19,10 @@
 #define OLED_RESET -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
+#define ok             2 
+#define boutonHeures   5  // Bouton pour ajuster les heures (D3)
+#define boutonMinutes  4  // Bouton pour ajuster les minutes (D4)
+
 const int potPin = A0;
 const int buttonSelectPin = 2;
 const int buttonBackPin = 3;
@@ -25,6 +30,7 @@ int menuOption = 0;
 const int numOptions = 4;
 int lastPotValue = 0;
 int threshold = 50;
+
 
 // Variables pour le lissage du potentiomètre
 #define NOMBRE_LISSAGE 10  // Nombre de lectures pour lisser la valeur
@@ -96,7 +102,7 @@ void displayMenu(int option) {
   display.clearDisplay();
   display.setCursor(0, 0);
   
-  const char* menuOptions[] = {"Format de l'heure", "Option 2", "Option 3", "Option 4"};
+  const char* menuOptions[] = {"Format de l'heure", "Reglage Alarme", "Option 3", "Option 4"};
   
   for (int i = 0; i < numOptions; i++) {
     display.setTextColor(i == option ? BLACK : WHITE, i == option ? WHITE : BLACK);
@@ -158,10 +164,72 @@ void selectFormat() {
   }
 }
 
+void modifierHeureSurOLED() {
+  int heures = 8; // Heure par défaut
+  int minutes = 0; // Minute par défaut
+  bool ajustementTermine = false;
+
+  unsigned long lastHeurePress = 0; // Dernier moment où le bouton heures a été pressé
+  unsigned long lastMinutePress = 0; // Dernier moment où le bouton minutes a été pressé
+  unsigned long lastValidationPress = 0; // Dernier moment où le bouton de validation a été pressé
+  unsigned long debounceDelay = 100; // Délais anti-rebond en millisecondes
+
+  display.clearDisplay();
+  display.setTextSize(2);
+
+  while (!ajustementTermine) {
+    // Affiche l'heure actuelle sur l'écran OLED
+    display.clearDisplay();
+    display.setCursor(20, 20);
+    display.print(heures < 10 ? "0" : "");
+    display.print(heures);
+    display.print(":");
+    display.print(minutes < 10 ? "0" : "");
+    display.print(minutes);
+    display.display();
+
+    // Vérifie si le bouton des heures est appuyé
+    if (digitalRead(boutonHeures) == HIGH && (millis() - lastHeurePress) > debounceDelay) {
+      heures = (heures + 1) % 24; // Incrémente les heures (24h max)
+      lastHeurePress = millis(); // Met à jour le moment où le bouton a été pressé
+    }
+
+    // Vérifie si le bouton des minutes est appuyé
+    if (digitalRead(boutonMinutes) == HIGH && (millis() - lastMinutePress) > debounceDelay) {
+      minutes = (minutes + 1) % 60; // Incrémente les minutes (59 max)
+      lastMinutePress = millis(); // Met à jour le moment où le bouton a été pressé
+    }
+
+    // Vérifie si le bouton de validation est appuyé (pin2)
+    delay(500);
+    if (digitalRead(ok) == LOW && (millis() - lastValidationPress) > debounceDelay) {
+      ajustementTermine = true; // Termine l'ajustement lorsque l'utilisateur appuie sur le bouton de validation
+      lastValidationPress = millis(); // Met à jour le moment où le bouton a été pressé
+    }
+    
+    // Aucun délai d'attente supplémentaire ici, tout se fait avec millis() pour plus de réactivité.
+  }
+
+  // Affichage final de confirmation
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println("Alarme:");
+  display.setCursor(0, 20);
+  display.print(heures < 10 ? "0" : "");
+  display.print(heures);
+  display.print(":");
+  display.print(minutes < 10 ? "0" : "");
+  display.print(minutes);
+  display.display();
+  delay(2000); // Affiche la confirmation pendant 2 secondes
+}
+
 void selectOption(int option) {
   if (option == 0) {
     selectFormat();
-  } else {
+  } else if (option == 1) { // Gestion de l'option 2
+    modifierHeureSurOLED();
+    } else {
     display.clearDisplay();
     display.setCursor(0, 0);
     display.println("Option " + String(option + 1) + " choisie");

@@ -25,7 +25,7 @@ RTC_DS3231 rtc;
 const byte CHIFFRE_0[] PROGMEM = {0b00111100, 0b01000010, 0b01000010, 0b01000010, 0b01000010, 0b01000010, 0b01000010, 0b00111100};
 const byte CHIFFRE_1[] PROGMEM = {0b00001000, 0b00011000, 0b00101000, 0b00001000, 0b00001000, 0b00001000, 0b00001000, 0b00011100};
 const byte CHIFFRE_2[] PROGMEM = {0b00111100, 0b01000010, 0b00000100, 0b00001000, 0b00010000, 0b00100000, 0b01000010, 0b01111110};
-const byte CHIFFRE_3[] PROGMEM = {0b00111100, 0b01000010, 0b00000110, 0b00011110, 0b00000110, 0b00000110, 0b01000010, 0b00111100};
+const byte CHIFFRE_3[] PROGMEM = {0b00111100, 0b01000010, 0b00000110, 0b00011100, 0b00000110, 0b00000010, 0b01000010, 0b00111100};
 const byte CHIFFRE_4[] PROGMEM = {0b00000100, 0b00001100, 0b00010100, 0b00100100, 0b01111110, 0b00000100, 0b00000100, 0b00000100};
 const byte CHIFFRE_5[] PROGMEM = {0b01111110, 0b01000000, 0b01000000, 0b01111100, 0b00000010, 0b00000010, 0b01000010, 0b00111100};
 const byte CHIFFRE_6[] PROGMEM = {0b00111100, 0b01000010, 0b01000000, 0b01111100, 0b01000010, 0b01000010, 0b01000010, 0b00111100};
@@ -200,10 +200,9 @@ void loop() {
   }
 
   // Faire clignoter le séparateur toutes les secondes
-  unsigned long currentMillis = millis();
-  if (currentMillis - previousMillis >= interval) {
-    previousMillis = currentMillis;
     pointAllume = !pointAllume;
-    matriceLed.setLed(2, 3, 7, pointAllume); // Clignotement du séparateur
-  }
+    matriceLed.setLed(2, 3, 7, pointAllume);
+
+    delay(1000); // Clignotement du séparateur
+  
 }

@@ -99,18 +99,28 @@ int lirePotentiometreStable() {
 }
 
 void displayMenu(int option) {
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  
+  display.clearDisplay();  // Efface l'écran à chaque fois qu'on entre dans le menu
+  display.setTextSize(1);  // Taille de texte par défaut
+  display.setTextColor(WHITE);  // Texte en blanc
+
   const char* menuOptions[] = {"Format de l'heure", "Reglage Alarme", "Option 3", "Option 4"};
-  
+
   for (int i = 0; i < numOptions; i++) {
-    display.setTextColor(i == option ? BLACK : WHITE, i == option ? WHITE : BLACK);
-    display.setCursor(0, i * 10);
-    display.println(menuOptions[i]);
+    if (i == option) {
+      // Mettre en surbrillance l'option sélectionnée
+      display.fillRect(0, i * 12, 128, 12, WHITE);  // Rectangle blanc
+      display.setTextColor(BLACK);  // Texte noir sur fond blanc
+    } else {
+      display.setTextColor(WHITE);  // Texte blanc sur fond noir
+    }
+
+    display.setCursor(2, i * 12);  // Position de chaque option
+    display.println(menuOptions[i]);  // Affiche l'option
   }
-  display.display();
+
+  display.display();  // Affiche tout le contenu sur l'écran OLED
 }
+
 
 void selectFormat() {
   delay(1000);
@@ -222,6 +232,7 @@ void modifierHeureSurOLED() {
   display.print(minutes);
   display.display();
   delay(2000); // Affiche la confirmation pendant 2 secondes
+  displayMenu(menuOption);
 }
 
 void selectOption(int option) {

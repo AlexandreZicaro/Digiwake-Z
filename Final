@@ -11,7 +11,9 @@
 #define brochePourLesDonnees 11
 #define brochePourLhorloge 13
 #define nombreDeMatricesLedRaccordees 4
-#define buzzerPin 8
+#define TRIG_PIN 7
+#define ECHO_PIN 6
+#define BUZZER_PIN 8
 
 // Broches pour l'écran OLED et le potentiomètre
 #define SCREEN_WIDTH 128
@@ -257,6 +259,9 @@ void setup() {
     matriceLed.setIntensity(i, 8);
     matriceLed.clearDisplay(i);
   }
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
 
   Serial.begin(9600);
   Wire.begin();
@@ -265,8 +270,8 @@ void setup() {
 
   pinMode(buttonSelectPin, INPUT_PULLUP);
   pinMode(buttonBackPin, INPUT_PULLUP);
-  pinMode(buzzerPin, OUTPUT); // Initialisation de la broche du buzzer
-  digitalWrite(buzzerPin, LOW); // Assurez-vous que le buzzer est éteint au départ
+  pinMode(BUZZER_PIN, OUTPUT); // Initialisation de la broche du buzzer
+  digitalWrite(BUZZER_PIN, LOW); // Assurez-vous que le buzzer est éteint au départ
 
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
     Serial.println(F("SSD1306 allocation failed"));
@@ -331,9 +336,9 @@ void loop() {
 
     // Vérifier si l'heure correspond à l'heure de l'alarme
     if (heures == heureAlarme && minutes == minuteAlarme && !alarmeActivee) {
-      digitalWrite(buzzerPin, HIGH); // Activer le buzzer
+      digitalWrite(BUZZER_PIN, HIGH); // Activer le buzzer
       delay(5000);                   // Le buzzer sonne pendant 5 secondes
-      digitalWrite(buzzerPin, LOW);  // Éteindre le buzzer
+      digitalWrite(BUZZER_PIN, LOW);  // Éteindre le buzzer
       alarmeActivee = true;          // Éviter une répétition inutile
     }
 
@@ -357,6 +362,26 @@ void loop() {
     // Attendre que le bouton soit relâché
     while (digitalRead(buttonBackPin) == LOW) {
       delay(10);
+     long duration, distance;
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+  
+  duration = pulseIn(ECHO_PIN, HIGH);
+  distance = (duration / 2) / 29.1; // Convertir le temps en distance
+  
+  if (distance < 10) { // Si la main est détectée à moins de 10 cm
+    digitalWrite(BUZZER_PIN, LOW); // Éteindre le buzzer
+    delay(300000); // Attendre 5 minutes (300000 ms)
+    digitalWrite(BUZZER_PIN, HIGH); // Rallumer le buzzer
+  } else {
+    digitalWrite(BUZZER_PIN, HIGH); // Buzzer reste allumé
+  }
+  
+  delay(500); // Petite pause pour éviter les lectures trop fréquentes
+
     }
   }
 }

@@ -397,3 +397,393 @@ void setup() {
 
 }
 
+
+
+
+#include <LedControl.h>
+#include <Wire.h>
+#include <RTClib.h>
+#include <SPI.h>
+#include <Arduino.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// Broches de raccordement Arduino Nano → Matrice LED pilotée par MAX7219
+#define brocheDeSelection 10
+#define brochePourLesDonnees 11
+#define brochePourLhorloge 13
+#define nombreDeMatricesLedRaccordees 4
+#define TRIG_PIN 7
+#define ECHO_PIN 6
+#define BUZZER_PIN 8
+
+// Broches pour l'écran OLED et le potentiomètre
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+#define ok             2 
+#define boutonHeures   5  // Bouton pour ajuster les heures (D3)
+#define boutonMinutes  4  // Bouton pour ajuster les minutes (D4)
+
+const int potPin = A0;
+const int buttonSelectPin = 2;
+const int buttonBackPin = 3;
+int menuOption = 0;
+const int numOptions = 4;
+int lastPotValue = 0;
+int threshold = 50;
+int heureAlarme = 0;   // Heure de l'alarme (initialisée à 00h)
+int minuteAlarme = 0;  // Minute de l'alarme (initialisée à 00m)
+bool alarmeActivee = false; // Variable pour éviter une répétition du déclenchement
+
+// Variables pour le lissage du potentiomètre
+#define NOMBRE_LISSAGE 10  // Nombre de lectures pour lisser la valeur
+#define SEUIL_DE_CHANGEMENT 512  // Seuil de changement de format (modifié selon la plage de potentiomètre)
+int valeursPotentiometre[NOMBRE_LISSAGE];  // Tableau pour stocker les dernières valeurs
+int indice = 0;  // Indice pour ajouter de nouvelles valeurs
+
+// Instanciation des objets LedControl et RTC
+LedControl matriceLed = LedControl(brochePourLesDonnees, brochePourLhorloge, brocheDeSelection, nombreDeMatricesLedRaccordees);
+RTC_DS3231 rtc;
+
+// Définition des chiffres en PROGMEM
+const byte CHIFFRES[10][8] PROGMEM = {
+  {0b00111100, 0b01000010, 0b01000010, 0b01000010, 0b01000010, 0b01000010, 0b01000010, 0b00111100},
+  {0b00001000, 0b00011000, 0b00101000, 0b00001000, 0b00001000, 0b00001000, 0b00001000, 0b00011100},
+  {0b00111100, 0b01000010, 0b00000100, 0b00001000, 0b00010000, 0b00100000, 0b01000010, 0b01111110},
+  {0b00111100, 0b01000010, 0b00000110, 0b00011110, 0b00000110, 0b00000110, 0b01000010, 0b00111100},
+  {0b00000100, 0b00001100, 0b00010100, 0b00100100, 0b01111110, 0b00000100, 0b00000100, 0b00000100},
+  {0b01111110, 0b01000000, 0b01000000, 0b01111100, 0b00000010, 0b00000010, 0b01000010, 0b00111100},
+  {0b00111100, 0b01000010, 0b01000000, 0b01111100, 0b01000010, 0b01000010, 0b01000010, 0b00111100},
+  {0b01111110, 0b00000010, 0b00000010, 0b00000100, 0b00001000, 0b00010000, 0b00100000, 0b01000000},
+  {0b00111100, 0b01000010, 0b01000010, 0b00111100, 0b01000010, 0b01000010, 0b01000010, 0b00111100},
+  {0b00111100, 0b01000010, 0b01000010, 0b01000010, 0b00111110, 0b00000010, 0b01000010, 0b00111100}
+};
+
+// Variables globales
+bool format24h = true;  // Valeur par défaut (24h)
+bool modeAjustement = false;
+
+// Fonctions de gestion des affichages
+void afficherChiffre(int position, const byte* chiffre) {
+  for (int i = 0; i < 8; i++) {
+    matriceLed.setRow(position, i, pgm_read_byte(&(chiffre[i])));
+  }
+}
+
+void afficherHeure(int heures, int minutes, bool amPm) {
+  // Affichage des heures
+  afficherChiffre(3, CHIFFRES[heures / 10]);
+  afficherChiffre(2, CHIFFRES[heures % 10]);
+  
+  // Affichage des minutes
+  afficherChiffre(1, CHIFFRES[minutes / 10]);
+  afficherChiffre(0, CHIFFRES[minutes % 10]);
+
+  // Si c'est un format 12h, afficher AM ou PM
+  if (!format24h) {
+    matriceLed.setChar(3, 6, amPm ? 'P' : 'A', false);
+    matriceLed.setChar(3, 7, 'M', false);
+  }
+}
+
+// Lissage de la valeur du potentiomètre
+int lirePotentiometreStable() {
+  int somme = 0;
+  // Ajouter la nouvelle valeur dans le tableau
+  valeursPotentiometre[indice] = analogRead(potPin);
+  indice = (indice + 1) % NOMBRE_LISSAGE;
+
+  // Calculer la moyenne des dernières lectures
+  for (int i = 0; i < NOMBRE_LISSAGE; i++) {
+    somme += valeursPotentiometre[i];
+  }
+
+  return somme / NOMBRE_LISSAGE;  // Retourner la moyenne
+}
+
+void displayMenu(int option) {
+  display.clearDisplay();  // Efface l'écran à chaque fois qu'on entre dans le menu
+  display.setTextSize(1);  // Taille de texte par défaut
+  display.setTextColor(WHITE);  // Texte en blanc
+
+  const char* menuOptions[] = {"Format de l'heure", "Reglage Alarme", "Option 3", "Option 4"};
+
+  for (int i = 0; i < numOptions; i++) {
+    if (i == option) {
+      // Mettre en surbrillance l'option sélectionnée
+      display.fillRect(0, i * 12, 128, 12, WHITE);  // Rectangle blanc
+      display.setTextColor(BLACK);  // Texte noir sur fond blanc
+    } else {
+      display.setTextColor(WHITE);  // Texte blanc sur fond noir
+    }
+
+    display.setCursor(2, i * 12);  // Position de chaque option
+    display.println(menuOptions[i]);  // Affiche l'option
+  }
+
+  display.display();  // Affiche tout le contenu sur l'écran OLED
+}
+
+
+void selectFormat() {
+  delay(1000);
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println("Select format:");
+  display.setCursor(0, 10);
+  display.println("1. 24h");
+  display.setCursor(0, 20);
+  display.println("2. 12h AM/PM");
+  display.display();
+
+  int lastSubOption = 0;
+  bool selecting = true;
+  while (selecting) {
+    // Lire la valeur stable du potentiomètre
+    int potValue = lirePotentiometreStable();
+    int subOption = (potValue < SEUIL_DE_CHANGEMENT) ? 1 : 2;  // 1 pour 24h, 2 pour 12h
+
+    // Afficher la sélection de manière lisible si l'option a changé
+    if (subOption != lastSubOption) {
+      lastSubOption = subOption;
+
+      display.setCursor(0, 10);
+      display.setTextColor(subOption == 1 ? BLACK : WHITE, subOption == 1 ? WHITE : BLACK);
+      display.println("1. 24h");
+
+      display.setCursor(0, 20);
+      display.setTextColor(subOption == 2 ? BLACK : WHITE, subOption == 2 ? WHITE : BLACK);
+      display.println("2. 12h AM/PM");
+      display.display();
+
+      delay(200);  // Attendre un peu avant de redessiner l'écran
+    }
+
+    // Confirmer la sélection avec le bouton sur la broche 2
+    if (digitalRead(buttonSelectPin) == LOW) {
+      selecting = false;
+      format24h = (subOption == 1);  // Définir format24h en fonction de l'option sélectionnée
+      display.clearDisplay();
+      display.setCursor(0, 0);
+      display.println(format24h ? "Format 24h choisi" : "Format 12h AM/PM choisi");
+      display.display();
+      delay(2000);  // Attendre 2 secondes pour afficher la confirmation
+
+      // Attendre que le bouton soit relâché
+      while (digitalRead(buttonSelectPin) == LOW) {
+        delay(10);
+      }
+    }
+  }
+}
+
+void modifierHeureSurOLED() {
+  int heures = 8; // Heure par défaut
+  int minutes = 0; // Minute par défaut
+  bool ajustementTermine = false;
+
+  unsigned long lastHeurePress = 0; // Dernier moment où le bouton heures a été pressé
+  unsigned long lastMinutePress = 0; // Dernier moment où le bouton minutes a été pressé
+  unsigned long lastValidationPress = 0; // Dernier moment où le bouton de validation a été pressé
+  unsigned long debounceDelay = 100; // Délais anti-rebond en millisecondes
+
+  display.clearDisplay();
+  display.setTextSize(2);
+
+  while (!ajustementTermine) {
+    // Affiche l'heure actuelle sur l'écran OLED
+    display.clearDisplay();
+    display.setCursor(20, 20);
+    display.print(heures < 10 ? "0" : "");
+    display.print(heures);
+    display.print(":");
+    display.print(minutes < 10 ? "0" : "");
+    display.print(minutes);
+    display.display();
+
+    // Vérifie si le bouton des heures est appuyé
+    if (digitalRead(boutonHeures) == HIGH && (millis() - lastHeurePress) > debounceDelay) {
+      heures = (heures + 1) % 24; // Incrémente les heures (24h max)
+      lastHeurePress = millis(); // Met à jour le moment où le bouton a été pressé
+    }
+
+    // Vérifie si le bouton des minutes est appuyé
+    if (digitalRead(boutonMinutes) == HIGH && (millis() - lastMinutePress) > debounceDelay) {
+      minutes = (minutes + 1) % 60; // Incrémente les minutes (59 max)
+      lastMinutePress = millis(); // Met à jour le moment où le bouton a été pressé
+    }
+
+    // Vérifie si le bouton de validation est appuyé (pin2)
+    delay(500);
+    if (digitalRead(ok) == LOW && (millis() - lastValidationPress) > debounceDelay) {
+      ajustementTermine = true; // Termine l'ajustement lorsque l'utilisateur appuie sur le bouton de validation
+      lastValidationPress = millis(); // Met à jour le moment où le bouton a été pressé
+    }
+    
+    // Aucun délai d'attente supplémentaire ici, tout se fait avec millis() pour plus de réactivité.
+  }
+
+  // Affichage final de confirmation
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println("Alarme:");
+  display.setCursor(0, 20);
+  display.print(heures < 10 ? "0" : "");
+  display.print(heures);
+  display.print(":");
+  display.print(minutes < 10 ? "0" : "");
+  display.print(minutes);
+  display.display();
+  delay(2000); // Affiche la confirmation pendant 2 secondes
+  displayMenu(menuOption);
+}
+
+void selectOption(int option) {
+  if (option == 0) {
+    selectFormat();
+  } else if (option == 1) { // Gestion de l'option 2
+    modifierHeureSurOLED();
+    } else {
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("Option " + String(option + 1) + " choisie");
+    display.display();
+    delay(2000);
+  }
+}
+
+void setup() {
+  for (int i = 0; i < nombreDeMatricesLedRaccordees; i++) {
+    matriceLed.shutdown(i, false);
+    matriceLed.setIntensity(i, 8);
+    matriceLed.clearDisplay(i);
+  }
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+
+  Serial.begin(9600);
+  Wire.begin();
+  rtc.begin();
+  rtc.adjust(DateTime(__DATE__, __TIME__));
+
+  pinMode(buttonSelectPin, INPUT_PULLUP);
+  pinMode(buttonBackPin, INPUT_PULLUP);
+  pinMode(BUZZER_PIN, OUTPUT); // Initialisation de la broche du buzzer
+  digitalWrite(BUZZER_PIN, LOW); // Assurez-vous que le buzzer est éteint au départ
+
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for (;;);
+  }
+
+  delay(2000);
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  displayMenu(menuOption);
+}
+
+void loop() {
+  int potValue = analogRead(potPin);
+
+  if (abs(potValue - lastPotValue) > threshold) {
+    menuOption = map(potValue, 0, 1023, 0, numOptions - 1); 
+    lastPotValue = potValue;
+    displayMenu(menuOption);
+  }
+
+  if (digitalRead(buttonSelectPin) == LOW) {
+    selectOption(menuOption);
+    delay(500);
+
+    // Attendre que le bouton soit relâché
+    while (digitalRead(buttonSelectPin) == LOW) {
+      delay(10);
+    }
+  }
+
+  if (digitalRead(buttonBackPin) == LOW) {
+    displayMenu(menuOption);
+    delay(500);
+
+    // Attendre que le bouton soit relâché
+    while (digitalRead(buttonBackPin) == LOW) {
+      delay(10);
+    }
+  }
+
+  if (!modeAjustement) {
+    static int minutePrecedente = -1;
+    static bool pointAllume = false;
+    DateTime now = rtc.now();
+
+    int heures = now.hour();
+    int minutes = now.minute();
+    bool amPm = heures >= 12;
+
+    if (!format24h) {
+      if (heures == 0) heures = 12;
+      else if (heures > 12) heures -= 12;
+    }
+
+    // Vérifier si l'heure a changé et mettre à jour l'affichage
+    if (minutes != minutePrecedente) {
+      minutePrecedente = minutes;
+      afficherHeure(heures, minutes, amPm);
+    }
+
+    // Vérifier si l'heure correspond à l'heure de l'alarme
+    if (heures == heureAlarme && minutes == minuteAlarme && !alarmeActivee) {
+      digitalWrite(BUZZER_PIN, HIGH); // Activer le buzzer
+      delay(5000);                   // Le buzzer sonne pendant 5 secondes
+      digitalWrite(BUZZER_PIN, LOW);  // Éteindre le buzzer
+      alarmeActivee = true;          // Éviter une répétition inutile
+    }
+
+    // Réinitialiser l'alarme pour le prochain déclenchement (lorsque les minutes changent)
+    if (minutes != minuteAlarme) {
+      alarmeActivee = false;
+    }
+
+    // Clignoter le séparateur ":" chaque seconde
+    pointAllume = !pointAllume;
+    matriceLed.setLed(2, 3, 7, pointAllume);
+
+    delay(1000);
+  }
+
+  // Attendre l'appui sur le bouton de retour pour revenir au menu principal
+  if (digitalRead(buttonBackPin) == LOW) {
+    displayMenu(menuOption);
+    delay(500);
+
+    // Attendre que le bouton soit relâché
+    while (digitalRead(buttonBackPin) == LOW) {
+      delay(10);
+     long duration, distance;
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+  
+  duration = pulseIn(ECHO_PIN, HIGH);
+  distance = (duration / 2) / 29.1; // Convertir le temps en distance
+  
+  if (distance < 10) { // Si la main est détectée à moins de 10 cm
+    digitalWrite(BUZZER_PIN, LOW); // Éteindre le buzzer
+    delay(300000); // Attendre 5 minutes (300000 ms)
+    digitalWrite(BUZZER_PIN, HIGH); // Rallumer le buzzer
+  } else {
+    digitalWrite(BUZZER_PIN, HIGH); // Buzzer reste allumé
+  }
+  
+  delay(500); // Petite pause pour éviter les lectures trop fréquentes
+
+    }
+  }
+}

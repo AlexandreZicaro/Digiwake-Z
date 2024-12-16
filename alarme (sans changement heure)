@@ -11,6 +11,9 @@
 #define brochePourLesDonnees 11
 #define brochePourLhorloge 13
 #define nombreDeMatricesLedRaccordees 4
+#define TRIG_PIN 7
+#define ECHO_PIN 6
+#define BUZZER_PIN 9
 
 // Broches pour l'écran OLED et le potentiomètre
 #define SCREEN_WIDTH 128
@@ -31,7 +34,10 @@ int lastPotValue = 0;
 int threshold = 50;
 int alarmeHeures = -1;   // Heure de l'alarme (initialisée à -1 pour indiquer qu'aucune alarme n'est réglée)
 int alarmeMinutes = -1;  // Minutes de l'alarme (initialisée à -1 pour indiquer qu'aucune alarme n'est réglée)
-bool alarmeActive = false; // Indique si l'alarme est active
+bool alarmeActive = true; // Indique si l'alarme est active
+bool alarmeDeclenchee = false;
+bool snoozeActive = false;
+unsigned long snoozeFinMillis = 0;
 const int buzzer = 9;  // Broche du buzzer // Buzzer sur la broche 8
 
 
@@ -193,12 +199,16 @@ void verifierAlarme() {
   int minutesActuelles = rtc.now().minute();
 
   // Compare avec l'heure de l'alarme
-  if (alarmeActive && heuresActuelles == alarmeHeures && minutesActuelles == alarmeMinutes) {
-    // Active le buzzer si l'heure actuelle correspond à celle de l'alarme
-    // Comparer avec l'heure de l'alarme
-  if (alarmeActive && heuresActuelles == alarmeHeures && minutesActuelles == alarmeMinutes) {
-    activerBuzzer();
+  if (alarmeActive && !snoozeActive) {
+    if (heuresActuelles == alarmeHeures && minutesActuelles == alarmeMinutes && !alarmeDeclenchee) {
+      activerBuzzer(); // Déclencher le buzzer
+      alarmeDeclenchee = true;
   }
+
+if (snoozeActive && tempsActuel >= snoozeFinMillis) {
+    snoozeActive = false; // Désactiver le *snooze*
+    activerBuzzer();
+}
   // Réinitialise le drapeau si l'heure ne correspond plus
   if (heuresActuelles != alarmeHeures || minutesActuelles != alarmeMinutes) {
     alarmeDeclenchee = false;
@@ -207,6 +217,43 @@ void verifierAlarme() {
 }
 
 
+void verifierCapteur() {
+  long duree, distance;
+
+  // Mesurer la distance avec le capteur à ultrasons
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  duree = pulseIn(ECHO_PIN, HIGH);
+  distance = (duree / 2) / 29.1; // Convertir le temps en distance
+
+  if (distance < 10 && alarmeDeclenchee) { // Si une main est détectée et l'alarme est active
+    activerSnooze();
+  }
+}
+
+void activerBuzzer() {
+  digitalWrite(BUZZER_PIN, HIGH);
+  Serial.println("Alarme déclenchée !");
+}
+
+// Désactive le buzzer
+void desactiverBuzzer() {
+  digitalWrite(BUZZER_PIN, LOW);
+  Serial.println("Buzzer désactivé.");
+}
+
+void activerSnooze() {
+  desactiverBuzzer();
+  snoozeActive = true;
+  snoozeFinMillis = millis() + (snoozeDuree * 60 * 1000); // Calculer la fin du *snooze*
+  Serial.print("Snooze activé pour ");
+  Serial.print(snoozeDuree);
+  Serial.println(" minutes.");
+}
 
 void modifierHeureSurOLED() {
   int heures = alarmeActive ? alarmeHeures : 8;   // Heure actuelle de l'alarme, sinon 8 par défaut
@@ -300,7 +347,9 @@ void setup() {
   pinMode(boutonHeures, INPUT_PULLUP);
   pinMode(boutonMinutes, INPUT_PULLUP);
   pinMode(buzzer, OUTPUT);
-  digitalWrite(8, LOW); // S'assure que le buzzer est désactivé au démarrage
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  digitalWrite(buzzer, LOW); // S'assure que le buzzer est désactivé au démarrage
 
   Serial.begin(9600);
   Wire.begin();
@@ -325,6 +374,7 @@ void setup() {
 
 void loop() {
   verifierAlarme();
+  verifierCapteur();
   int potValue = analogRead(potPin);
 
   if (abs(potValue - lastPotValue) > threshold) {

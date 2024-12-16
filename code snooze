@@ -1,7 +1,7 @@
 #include <arduino.h>
-#define TRIG_PIN 9
-#define ECHO_PIN 8
-#define BUZZER_PIN 7
+#define TRIG_PIN 7
+#define ECHO_PIN 6
+#define BUZZER_PIN 9
 
 void setup() {
   pinMode(TRIG_PIN, OUTPUT);

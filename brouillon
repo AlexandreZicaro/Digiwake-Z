@@ -1,4 +1,3 @@
-
 #include <LedControl.h>
 #include <avr/pgmspace.h>
 #include <Wire.h>
@@ -34,7 +33,7 @@ int indice = 0;  // Indice pour ajouter de nouvelles valeurs
 #define ok              2 
 #define boutonHeures   5  // Bouton pour ajuster les heures (D3)
 #define boutonMinutes  4  // Bouton pour ajuster les minutes (D4)
-#define boutonValider  5  // Bouton pour valider l'heure ajustée (D5)
+#define boutonValider  3  // Bouton pour valider l'heure ajustée (D5)
 #define buzzerPin      8  // Buzzer connecté à D8
 
 // Définition des autres constantes
@@ -100,40 +99,26 @@ void ajusterHeure() {
   afficherHeure(heuresAjustees, minutesAjustees);
 }
 
-// Ajouter une variable pour suivre l'état du mode d'ajustement
-bool modeAjustementHeure = false;
-
-// Modifier la fonction de gestion du mode d'ajustement
-void gererBoutonAjustementHeure() {
-  static bool etatBoutonPrecedent = HIGH; // État précédent du bouton
-  bool etatBoutonActuel = digitalRead(buttonBackPin); // Lire l'état du bouton (pin 3)
-
-  // Détecter un changement d'état (appui sur le bouton)
-  if (etatBoutonActuel == LOW && etatBoutonPrecedent == HIGH) {
-    // Inverser le mode d'ajustement
-    modeAjustementHeure = !modeAjustementHeure;
-
-    if (modeAjustementHeure) {
-      // Entrer en mode d'ajustement : initialiser les heures et minutes actuelles
+void gererBoutonsModeAjustement() {
+  if (digitalRead(boutonValider)) {
+    if (!modeAjustement) {
+      // Activation du mode ajustement
+      modeAjustement = true;
       DateTime now = rtc.now();
       heuresAjustees = now.hour();
       minutesAjustees = now.minute();
     } else {
-      // Sortir du mode d'ajustement : valider les nouvelles heures et minutes
+      // Validation et désactivation du mode ajustement
       rtc.adjust(DateTime(2023, 1, 1, heuresAjustees, minutesAjustees, 0)); // Exemple de date arbitraire
+      modeAjustement = false;
     }
-
     delay(500); // Anti-rebond
   }
 
-  etatBoutonPrecedent = etatBoutonActuel;
-
-  // Si on est en mode d'ajustement, permettre de modifier les heures et minutes
-  if (modeAjustementHeure) {
+  if (modeAjustement) {
     ajusterHeure();
   }
 }
-
 void ajusterAlarme() {
   static bool enModeAjustementAlarme = false;
   static bool pointAllume = false;
@@ -189,7 +174,7 @@ void displayMenu(int option) {
   display.clearDisplay();
   display.setCursor(0, 0);
   
-  const char* menuOptions[] = {"Format de l'heure", "Option 2", "Option 3", "Option 4"};
+  const char* menuOptions[] = {"Format de l'heure", "Reglage Alarme", "Option 3", "Option 4"};
   
   for (int i = 0; i < numOptions; i++) {
     display.setTextColor(i == option ? BLACK : WHITE, i == option ? WHITE : BLACK);
@@ -198,335 +183,6 @@ void displayMenu(int option) {
   }
   display.display();
 }
-
-void selectFormat() {
-  delay(1000);
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  display.println("Select format:");
-  display.setCursor(0, 10);
-  display.println("1. 24h");
-  display.setCursor(0, 20);
-  display.println("2. 12h AM/PM");
-  display.display();
-
-  int lastSubOption = 0;
-  bool selecting = true;
-  while (selecting) {
-    // Lire la valeur stable du potentiomètre
-    int potValue = lirePotentiometreStable();
-    int subOption = (potValue < SEUIL_DE_CHANGEMENT) ? 1 : 2;  // 1 pour 24h, 2 pour 12h
-
-    // Afficher la sélection de manière lisible si l'option a changé
-    if (subOption != lastSubOption) {
-      lastSubOption = subOption;
-
-      display.setCursor(0, 10);
-      display.setTextColor(subOption == 1 ? BLACK : WHITE, subOption == 1 ? WHITE : BLACK);
-      display.println("1. 24h");
-
-      display.setCursor(0, 20);
-      display.setTextColor(subOption == 2 ? BLACK : WHITE, subOption == 2 ? WHITE : BLACK);
-      display.println("2. 12h AM/PM");
-      display.display();
-
-      delay(200);  // Attendre un peu avant de redessiner l'écran
-    }
-
-    // Confirmer la sélection avec le bouton sur la broche 2
-    if (digitalRead(buttonSelectPin) == LOW) {
-      selecting = false;
-      format24h = (subOption == 1);  // Définir format24h en fonction de l'option sélectionnée
-      display.clearDisplay();
-      display.setCursor(0, 0);
-      display.println(format24h ? "Format 24h choisi" : "Format 12h AM/PM choisi");
-      display.display();
-      delay(2000);  // Attendre 2 secondes pour afficher la confirmation
-      displayMenu(menuOption);
-      // Attendre que le bouton soit relâché
-      while (digitalRead(buttonSelectPin) == LOW) {
-        delay(10);
-      }
-    }
-  }
-}
-
-void selectOption(int option) {
-  if (option == 0) {
-    selectFormat();
-  } else {
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.println("Option " + String(option + 1) + " choisie");
-    display.display();
-    delay(2000);
-  }
-}
-void loop() {
-  // Gérer le mode d'ajustement de l'heure via le bouton en pin 3
-  static bool modeAjustementHeure = false;
-  static bool etatBoutonPrecedent = HIGH;
-  bool etatBoutonActuel = digitalRead(buttonBackPin); // Lire l'état du bouton (pin 3)
-
-  // Détecter un changement d'état pour activer/désactiver le mode d'ajustement
-  if (etatBoutonActuel == LOW && etatBoutonPrecedent == HIGH) {
-    modeAjustementHeure = !modeAjustementHeure;
-
-    if (modeAjustementHeure) {
-      // Entrer en mode d'ajustement : initialiser heures/minutes actuelles
-      DateTime now = rtc.now();
-      heuresAjustees = now.hour();
-      minutesAjustees = now.minute();
-    } else {
-      // Sortir du mode d'ajustement : valider l'heure ajustée
-      rtc.adjust(DateTime(2023, 1, 1, heuresAjustees, minutesAjustees, 0)); // Valider l'heure ajustée
-    }
-
-    delay(500); // Anti-rebond
-  }
-
-  etatBoutonPrecedent = etatBoutonActuel;
-
-  // Si on est en mode d'ajustement
-  if (modeAjustementHeure) {
-    // Permettre de modifier les heures et minutes
-    static bool etatHeurePrecedent = HIGH, etatMinutePrecedent = HIGH;
-
-    // Gestion du bouton des heures (pin 5)
-    bool etatHeureActuel = digitalRead(boutonHeures);
-    if (etatHeureActuel == LOW && etatHeurePrecedent == HIGH) {
-      heuresAjustees = (heuresAjustees + 1) % 24; // Incrémenter l'heure, modulo 24
-      delay(200); // Anti-rebond
-    }
-    etatHeurePrecedent = etatHeureActuel;
-
-    // Gestion du bouton des minutes (pin 4)
-    bool etatMinuteActuel = digitalRead(boutonMinutes);
-    if (etatMinuteActuel == LOW && etatMinutePrecedent == HIGH) {
-      minutesAjustees = (minutesAjustees + 1) % 60; // Incrémenter les minutes, modulo 60
-      delay(200); // Anti-rebond
-    }
-    etatMinutePrecedent = etatMinuteActuel;
-
-    // Afficher l'heure ajustée en temps réel sur la matrice LED
-    afficherHeure(heuresAjustees, minutesAjustees);
-  } else {
-    // Si on n'est pas en mode d'ajustement, afficher l'heure actuelle normalement
-    DateTime now = rtc.now();
-    afficherHeure(now.hour(), now.minute());
-
-    // Vérifier si c'est l'heure de l'alarme
-    static bool alarmeActivee = false;
-    if (now.hour() == alarmHour && now.minute() == alarmMinute && !alarmeActivee) {
-      digitalWrite(buzzerPin, HIGH); // Activer le buzzer
-      delay(1000);
-      digitalWrite(buzzerPin, LOW);
-      alarmeActivee = true;
-    }
-
-    if (digitalRead(buttonSelectPin) == LOW) 
-    selectOption(menuOption);
-    delay(500);
-
-    // Réinitialiser l'alarme si on change de minute
-    if (now.minute() != alarmMinute) {
-      alarmeActivee = false;
-    }
-
-    // Clignoter le séparateur ":" chaque seconde
-    static unsigned long dernierMillis = 0;
-    if (millis() - dernierMillis >= 1000) {
-      dernierMillis = millis();
-      static bool pointAllume = false;
-      pointAllume = !pointAllume;
-      matriceLed.setLed(2, 3, 7, pointAllume); // Basculer l'état du séparateur
-    }
-  }
-}
-
-void setup() {
-  // Initialisation des matrices LED
-  for (int i = 0; i < nombreDeMatricesLedRaccordees; i++) {
-    matriceLed.shutdown(i, false);     // Réveille la matrice LED
-    matriceLed.setIntensity(i, 8);    // Définit l'intensité (0-15)
-    matriceLed.clearDisplay(i);       // Efface l'affichage
-  }
-
-  Serial.begin(9600);
-  Serial.println("Init : 0");
- 
-  Wire.begin();       // Initialise la communication I2C
-  
-  Serial.println("Init : 1");
-
-  rtc.begin();       
-  rtc.adjust(DateTime(__DATE__, __TIME__));
-
-  Serial.println("Init : 2");
-
-  pinMode(boutonHeures, INPUT);  // Bouton pour ajuster les heures
-  pinMode(boutonMinutes, INPUT); // Bouton pour ajuster les minutes
-  pinMode(boutonValider, INPUT); // Bouton pour valider les ajustements
-  pinMode(buzzerPin, OUTPUT);    // Buzzer
-
-  pinMode(ok, INPUT_PULLUP);     // Bouton pour régler l'alarme
-  for (int i = 0; i < nombreDeMatricesLedRaccordees; i++) {
-    matriceLed.shutdown(i, false);
-    matriceLed.setIntensity(i, 8);
-    matriceLed.clearDisplay(i);
-  }
-
-  Serial.begin(9600);
-  Wire.begin();
-  rtc.begin();
-  rtc.adjust(DateTime(__DATE__, __TIME__));
-
-  pinMode(buttonSelectPin, INPUT_PULLUP);
-  pinMode(buttonBackPin, INPUT_PULLUP);
-
-  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-    Serial.println(F("SSD1306 allocation failed"));
-    for (;;);
-  }
-
-  delay(2000);
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
-  displayMenu(menuOption);
-
-}
-
-
-
-
-#include <LedControl.h>
-#include <Wire.h>
-#include <RTClib.h>
-#include <SPI.h>
-#include <Arduino.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
-
-// Broches de raccordement Arduino Nano → Matrice LED pilotée par MAX7219
-#define brocheDeSelection 10
-#define brochePourLesDonnees 11
-#define brochePourLhorloge 13
-#define nombreDeMatricesLedRaccordees 4
-#define TRIG_PIN 7
-#define ECHO_PIN 6
-#define BUZZER_PIN 8
-
-// Broches pour l'écran OLED et le potentiomètre
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define OLED_RESET -1
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-
-#define ok             2 
-#define boutonHeures   5  // Bouton pour ajuster les heures (D3)
-#define boutonMinutes  4  // Bouton pour ajuster les minutes (D4)
-
-const int potPin = A0;
-const int buttonSelectPin = 2;
-const int buttonBackPin = 3;
-int menuOption = 0;
-const int numOptions = 4;
-int lastPotValue = 0;
-int threshold = 50;
-int heureAlarme = 0;   // Heure de l'alarme (initialisée à 00h)
-int minuteAlarme = 0;  // Minute de l'alarme (initialisée à 00m)
-bool alarmeActivee = false; // Variable pour éviter une répétition du déclenchement
-
-// Variables pour le lissage du potentiomètre
-#define NOMBRE_LISSAGE 10  // Nombre de lectures pour lisser la valeur
-#define SEUIL_DE_CHANGEMENT 512  // Seuil de changement de format (modifié selon la plage de potentiomètre)
-int valeursPotentiometre[NOMBRE_LISSAGE];  // Tableau pour stocker les dernières valeurs
-int indice = 0;  // Indice pour ajouter de nouvelles valeurs
-
-// Instanciation des objets LedControl et RTC
-LedControl matriceLed = LedControl(brochePourLesDonnees, brochePourLhorloge, brocheDeSelection, nombreDeMatricesLedRaccordees);
-RTC_DS3231 rtc;
-
-// Définition des chiffres en PROGMEM
-const byte CHIFFRES[10][8] PROGMEM = {
-  {0b00111100, 0b01000010, 0b01000010, 0b01000010, 0b01000010, 0b01000010, 0b01000010, 0b00111100},
-  {0b00001000, 0b00011000, 0b00101000, 0b00001000, 0b00001000, 0b00001000, 0b00001000, 0b00011100},
-  {0b00111100, 0b01000010, 0b00000100, 0b00001000, 0b00010000, 0b00100000, 0b01000010, 0b01111110},
-  {0b00111100, 0b01000010, 0b00000110, 0b00011110, 0b00000110, 0b00000110, 0b01000010, 0b00111100},
-  {0b00000100, 0b00001100, 0b00010100, 0b00100100, 0b01111110, 0b00000100, 0b00000100, 0b00000100},
-  {0b01111110, 0b01000000, 0b01000000, 0b01111100, 0b00000010, 0b00000010, 0b01000010, 0b00111100},
-  {0b00111100, 0b01000010, 0b01000000, 0b01111100, 0b01000010, 0b01000010, 0b01000010, 0b00111100},
-  {0b01111110, 0b00000010, 0b00000010, 0b00000100, 0b00001000, 0b00010000, 0b00100000, 0b01000000},
-  {0b00111100, 0b01000010, 0b01000010, 0b00111100, 0b01000010, 0b01000010, 0b01000010, 0b00111100},
-  {0b00111100, 0b01000010, 0b01000010, 0b01000010, 0b00111110, 0b00000010, 0b01000010, 0b00111100}
-};
-
-// Variables globales
-bool format24h = true;  // Valeur par défaut (24h)
-bool modeAjustement = false;
-
-// Fonctions de gestion des affichages
-void afficherChiffre(int position, const byte* chiffre) {
-  for (int i = 0; i < 8; i++) {
-    matriceLed.setRow(position, i, pgm_read_byte(&(chiffre[i])));
-  }
-}
-
-void afficherHeure(int heures, int minutes, bool amPm) {
-  // Affichage des heures
-  afficherChiffre(3, CHIFFRES[heures / 10]);
-  afficherChiffre(2, CHIFFRES[heures % 10]);
-  
-  // Affichage des minutes
-  afficherChiffre(1, CHIFFRES[minutes / 10]);
-  afficherChiffre(0, CHIFFRES[minutes % 10]);
-
-  // Si c'est un format 12h, afficher AM ou PM
-  if (!format24h) {
-    matriceLed.setChar(3, 6, amPm ? 'P' : 'A', false);
-    matriceLed.setChar(3, 7, 'M', false);
-  }
-}
-
-// Lissage de la valeur du potentiomètre
-int lirePotentiometreStable() {
-  int somme = 0;
-  // Ajouter la nouvelle valeur dans le tableau
-  valeursPotentiometre[indice] = analogRead(potPin);
-  indice = (indice + 1) % NOMBRE_LISSAGE;
-
-  // Calculer la moyenne des dernières lectures
-  for (int i = 0; i < NOMBRE_LISSAGE; i++) {
-    somme += valeursPotentiometre[i];
-  }
-
-  return somme / NOMBRE_LISSAGE;  // Retourner la moyenne
-}
-
-void displayMenu(int option) {
-  display.clearDisplay();  // Efface l'écran à chaque fois qu'on entre dans le menu
-  display.setTextSize(1);  // Taille de texte par défaut
-  display.setTextColor(WHITE);  // Texte en blanc
-
-  const char* menuOptions[] = {"Format de l'heure", "Reglage Alarme", "Option 3", "Option 4"};
-
-  for (int i = 0; i < numOptions; i++) {
-    if (i == option) {
-      // Mettre en surbrillance l'option sélectionnée
-      display.fillRect(0, i * 12, 128, 12, WHITE);  // Rectangle blanc
-      display.setTextColor(BLACK);  // Texte noir sur fond blanc
-    } else {
-      display.setTextColor(WHITE);  // Texte blanc sur fond noir
-    }
-
-    display.setCursor(2, i * 12);  // Position de chaque option
-    display.println(menuOptions[i]);  // Affiche l'option
-  }
-
-  display.display();  // Affiche tout le contenu sur l'écran OLED
-}
-
 
 void selectFormat() {
   delay(1000);
@@ -641,6 +297,7 @@ void modifierHeureSurOLED() {
   displayMenu(menuOption);
 }
 
+
 void selectOption(int option) {
   if (option == 0) {
     selectFormat();
@@ -655,40 +312,50 @@ void selectOption(int option) {
   }
 }
 
-void setup() {
-  for (int i = 0; i < nombreDeMatricesLedRaccordees; i++) {
-    matriceLed.shutdown(i, false);
-    matriceLed.setIntensity(i, 8);
-    matriceLed.clearDisplay(i);
-  }
-  pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
-  pinMode(BUZZER_PIN, OUTPUT);
-
-  Serial.begin(9600);
-  Wire.begin();
-  rtc.begin();
-  rtc.adjust(DateTime(__DATE__, __TIME__));
-
-  pinMode(buttonSelectPin, INPUT_PULLUP);
-  pinMode(buttonBackPin, INPUT_PULLUP);
-  pinMode(BUZZER_PIN, OUTPUT); // Initialisation de la broche du buzzer
-  digitalWrite(BUZZER_PIN, LOW); // Assurez-vous que le buzzer est éteint au départ
-
-  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-    Serial.println(F("SSD1306 allocation failed"));
-    for (;;);
-  }
-
-  delay(2000);
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
-  displayMenu(menuOption);
-}
-
 void loop() {
-  int potValue = analogRead(potPin);
+  static bool alarmeActivee = false;
+  static unsigned long previousMillis = 0;
+  const long interval = 1000; // Intervalle de 1 seconde
+  static bool pointAllume = false;
+
+  // Si on est en mode ajustement, gérer les boutons
+  gererBoutonsModeAjustement();
+
+  if (!modeAjustement) {
+    // Récupérer l'heure actuelle
+    DateTime now = rtc.now();
+
+    // Afficher l'heure actuelle
+    afficherHeure(now.hour(), now.minute());
+
+    // Vérifier si l'heure actuelle correspond à l'heure de l'alarme
+    if (now.hour() == alarmHour && now.minute() == alarmMinute && !alarmeActivee) {
+      // Activer le buzzer
+      digitalWrite(buzzerPin, HIGH);
+      delay(1000); // Durée du signal du buzzer
+      digitalWrite(buzzerPin, LOW);
+      alarmeActivee = true; // Éviter les répétitions d'alarme dans la même minute
+    }
+
+
+    // Réinitialiser l'état de l'alarme à la minute suivante
+    if (now.minute() != alarmMinute) {
+      alarmeActivee = false;
+    }
+  }
+
+  // Vérifier si le bouton pour ajuster l'alarme est appuyé
+  if (digitalRead(ok) == LOW) { // Bouton appuyé (utilisation du pull-up)
+    delay(200); // Anti-rebond
+    // Entrer dans le mode d'ajustement de l'alarme
+  }
+
+  // Faire clignoter le séparateur toutes les secondes
+    pointAllume = !pointAllume;
+    matriceLed.setLed(2, 3, 7, pointAllume);
+
+    delay(1000); // Clignotement du séparateur
+   int potValue = analogRead(potPin);
 
   if (abs(potValue - lastPotValue) > threshold) {
     menuOption = map(potValue, 0, 1023, 0, numOptions - 1); 
@@ -730,26 +397,11 @@ void loop() {
       else if (heures > 12) heures -= 12;
     }
 
-    // Vérifier si l'heure a changé et mettre à jour l'affichage
     if (minutes != minutePrecedente) {
       minutePrecedente = minutes;
-      afficherHeure(heures, minutes, amPm);
+      afficherHeure(heures, minutes);
     }
-
-    // Vérifier si l'heure correspond à l'heure de l'alarme
-    if (heures == heureAlarme && minutes == minuteAlarme && !alarmeActivee) {
-      digitalWrite(BUZZER_PIN, HIGH); // Activer le buzzer
-      delay(5000);                   // Le buzzer sonne pendant 5 secondes
-      digitalWrite(BUZZER_PIN, LOW);  // Éteindre le buzzer
-      alarmeActivee = true;          // Éviter une répétition inutile
-    }
-
-    // Réinitialiser l'alarme pour le prochain déclenchement (lorsque les minutes changent)
-    if (minutes != minuteAlarme) {
-      alarmeActivee = false;
-    }
-
-    // Clignoter le séparateur ":" chaque seconde
+    //clignotement séparateur
     pointAllume = !pointAllume;
     matriceLed.setLed(2, 3, 7, pointAllume);
 
@@ -764,26 +416,59 @@ void loop() {
     // Attendre que le bouton soit relâché
     while (digitalRead(buttonBackPin) == LOW) {
       delay(10);
-     long duration, distance;
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-  
-  duration = pulseIn(ECHO_PIN, HIGH);
-  distance = (duration / 2) / 29.1; // Convertir le temps en distance
-  
-  if (distance < 10) { // Si la main est détectée à moins de 10 cm
-    digitalWrite(BUZZER_PIN, LOW); // Éteindre le buzzer
-    delay(300000); // Attendre 5 minutes (300000 ms)
-    digitalWrite(BUZZER_PIN, HIGH); // Rallumer le buzzer
-  } else {
-    digitalWrite(BUZZER_PIN, HIGH); // Buzzer reste allumé
-  }
-  
-  delay(500); // Petite pause pour éviter les lectures trop fréquentes
-
     }
   }
+}
+
+void setup() {
+  // Initialisation des matrices LED
+  for (int i = 0; i < nombreDeMatricesLedRaccordees; i++) {
+    matriceLed.shutdown(i, false);     // Réveille la matrice LED
+    matriceLed.setIntensity(i, 8);    // Définit l'intensité (0-15)
+    matriceLed.clearDisplay(i);       // Efface l'affichage
+  }
+
+  Serial.begin(9600);
+  Serial.println("Init : 0");
+ 
+  Wire.begin();       // Initialise la communication I2C
+  
+  Serial.println("Init : 1");
+
+  rtc.begin();       
+  rtc.adjust(DateTime(__DATE__, __TIME__));
+
+  Serial.println("Init : 2");
+
+  pinMode(boutonHeures, INPUT);  // Bouton pour ajuster les heures
+  pinMode(boutonMinutes, INPUT); // Bouton pour ajuster les minutes
+  pinMode(boutonValider, INPUT); // Bouton pour valider les ajustements
+  pinMode(buzzerPin, OUTPUT);    // Buzzer
+
+  pinMode(ok, INPUT_PULLUP);     // Bouton pour régler l'alarme
+  for (int i = 0; i < nombreDeMatricesLedRaccordees; i++) {
+    matriceLed.shutdown(i, false);
+    matriceLed.setIntensity(i, 8);
+    matriceLed.clearDisplay(i);
+  }
+
+  Serial.begin(9600);
+  Wire.begin();
+  rtc.begin();
+  rtc.adjust(DateTime(__DATE__, __TIME__));
+
+  pinMode(buttonSelectPin, INPUT_PULLUP);
+  pinMode(buttonBackPin, INPUT_PULLUP);
+
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for (;;);
+  }
+
+  delay(2000);
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  displayMenu(menuOption);
+
 }

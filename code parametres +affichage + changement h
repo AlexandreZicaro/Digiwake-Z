@@ -31,9 +31,9 @@ int indice = 0;  // Indice pour ajouter de nouvelles valeurs
 #define brochePourLesDonnees            11  // Sortie D11 de l'Arduino (MOSI) vers la broche DIN de la matrice LED
 #define brochePourLhorloge              13  // Sortie D13 de l'Arduino (SCK) vers la broche CLK de la matrice LED
 #define ok              2 
-#define boutonHeures   3  // Bouton pour ajuster les heures (D3)
+#define boutonHeures   5  // Bouton pour ajuster les heures (D3)
 #define boutonMinutes  4  // Bouton pour ajuster les minutes (D4)
-#define boutonValider  5  // Bouton pour valider l'heure ajustée (D5)
+#define boutonValider  3  // Bouton pour valider l'heure ajustée (D5)
 #define buzzerPin      8  // Buzzer connecté à D8
 
 // Définition des autres constantes

@@ -11,9 +11,7 @@
 #define brochePourLesDonnees 11
 #define brochePourLhorloge 13
 #define nombreDeMatricesLedRaccordees 4
-#define TRIG_PIN 7
-#define ECHO_PIN 6
-#define BUZZER_PIN 9
+
 
 // Broches pour l'écran OLED et le potentiomètre
 #define SCREEN_WIDTH 128

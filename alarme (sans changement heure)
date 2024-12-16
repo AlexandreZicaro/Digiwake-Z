@@ -137,6 +137,22 @@ void activerBuzzer() {
   digitalWrite(buzzer, LOW);
 }
 
+// Désactive le buzzer
+void desactiverBuzzer() {
+  digitalWrite(BUZZER_PIN, LOW);
+  Serial.println("Buzzer désactivé.");
+}
+
+// Active le mode *snooze*
+void activerSnooze() {
+  desactiverBuzzer();
+  snoozeActive = true;
+  snoozeFinMillis = millis() + (snoozeDuree * 60 * 1000); // Calculer la fin du *snooze*
+  Serial.print("Snooze activé pour ");
+  Serial.print(snoozeDuree);
+  Serial.println(" minutes.");
+}
+
 void selectFormat() {
   delay(1000);
   display.clearDisplay();
@@ -323,17 +339,21 @@ void modifierHeureSurOLED() {
 }
 
 
-void selectOption(int option) {
-  if (option == 0) {
-    selectFormat();
-  } else if (option == 1) { // Gestion de l'option 2
-    modifierHeureSurOLED();
-    } else {
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.println("Option " + String(option + 1) + " choisie");
-    display.display();
-    delay(2000);
+switch (choix) {
+      case 1:
+        reglerAlarme();
+        break;
+      case 2:
+        activerDesactiverAlarme();
+        break;
+      case 3:
+        reglerSnooze();
+        break;
+      case 4:
+        Serial.println("Sortie du menu.");
+        break;
+}
+afficherMenu();
 }
 }
 
